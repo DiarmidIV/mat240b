@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 #include "allocore/io/al_App.hpp"
+#include "allocore/math/al_Ray.hpp"
 
 #include "Gamma/Filter.h"
 #include "Gamma/Oscillator.h"
@@ -88,15 +89,14 @@ struct CalculateCurve {
 						
       diss[ind] = d;
 			intervals[ind] = interval;  
-			printf("ind is: %d .\n", ind);
-			printf("Interval %f - Dissonance %f \n",intervals[ind], diss[ind]);					
+		//	printf("ind is: %d .\n", ind);
+		//	printf("Interval %f - Dissonance %f \n",intervals[ind], diss[ind]);					
 			ind++;
     }
 			
 		int dissvalues = (int) ((highint-lowint)/inc);	
-		printf("There are %d dissonance values\n", dissvalues);	
+	//	printf("There are %d dissonance values\n", dissvalues);	
   }
-
 };
 
 struct Data {
@@ -114,27 +114,45 @@ bool compareInterval (Data a, Data b) { return (a.interval < b.interval); }
 bool compareDissonance (Data a, Data b) { return (a.dissonance < b.dissonance); }
 
 struct Graph {
+  Mesh m;
+
+  Graph() {
+    m.primitive(Graphics::LINES);
+    m.vertex(0,0,0);
+    m.vertex(3,0,0);
+    m.vertex(0,0.05,0);
+    m.vertex(0,-0.05,0);
+    m.vertex(1,0.05,0);
+    m.vertex(1,-0.05,0);
+    m.vertex(2,0.05,0);
+    m.vertex(2,-0.05,0);
+    m.vertex(3,0.05,0);
+    m.vertex(3,-0.05,0);
+
+    for (unsigned i = 0; i < 36; i++) {
+      m.vertex(i/12.0f,0.01,0);
+      m.vertex(i/12.0f,-0.01,0);
+    }
+  }
   
-  Graph() {}
+  void draw(Graphics& g) {
+  g.draw(m);
+  }
+};
+
+struct ScaleDegree {
+  Vec3f position;
+
+  ScaleDegree(Vec3f initPosition) {
+    position = initPosition;
+  }
   
   void draw(Graphics& g, Mesh& m) {
-  m.primitive(Graphics::LINES);
-  m.vertex(0,0,0);
-  m.vertex(3,0,0);
-  m.vertex(0,0.05,0);
-  m.vertex(0,-0.05,0);
-  m.vertex(1,0.05,0);
-  m.vertex(1,-0.05,0);
-  m.vertex(2,0.05,0);
-  m.vertex(2,-0.05,0);
-  m.vertex(3,0.05,0);
-  m.vertex(3,-0.05,0);
-
-  for (unsigned i = 0; i < 36; i++) {
-    m.vertex(i/12.0f,0.01,0);
-    m.vertex(i/12.0f,-0.01,0);
-  }
-  g.draw(m);
+    m.color(1,1,1);
+    g.pushMatrix();
+    g.translate(position);
+    g.draw(m);
+    g.popMatrix();
   }
 };
 
@@ -142,27 +160,33 @@ struct AlloApp : App {
 
 CalculateCurve calc;  
 std::vector <Data> data;
+std::vector <ScaleDegree> scaleDegree;
 Graph axis;
 Mesh graph;
+Mesh sphere;
+float radius = 0.01f;
 
 GLVBinding gui;
 glv::Slider slider;
 glv::Sliders sliders;
 glv::Sliders sliders2;
-float f[8] = {100,210,320,430,540,650,760,870};
+float f[8] = {100,200,300,400,500,600,700,800};
 float a[8] = {1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3};
+bool redrawGraph = false;
 
 glv::Table layout;
 
 gam::Sine<> sine[8];
+float transpositionFactor = 1.0f;
 
   AlloApp() {
     nav().pos(0,0,10);
+    navControl().useMouse(false);
+   
     initWindow();
-     
-//    float f[] = {100,210,320,430,540,650,760,870};
-//    float a[] = {1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3};
     
+    addSphere(sphere, radius);
+      
     calc.calculate(f,a);
 
     for (unsigned i = 1; i < 299; i++) {
@@ -173,37 +197,39 @@ gam::Sine<> sine[8];
           data.push_back(d); 
         }
     }
+    /*
+    std::sort (data.begin(), data.end(), compareDissonance);
+    for (unsigned i = 0; i < data.size(); i++) {
+      std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;    
+    }
+    */
+    std::cout << "MINIMA: " << std::endl;
+    std::sort (data.begin(), data.end(), compareDissonance);
+    Vec3f position = {0,0,0};
+    ScaleDegree d = {position};
+    scaleDegree.push_back(d);
+    for (unsigned i = 0; i < data.size(); i++) {
+      Vec3f position = {(data[i].interval-1.0f),0,0};
+      ScaleDegree d = {position};
+      scaleDegree.push_back(d);
+      std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;
+    }
 
-   //  std::cout << data.size() << std::endl; 
-   std::sort (data.begin(), data.end(), compareDissonance);
-   //  std::cout << data.size() << std::endl;
-   for (unsigned i = 0; i < data.size(); i++) {
-   std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;   
-   }
-
-  gui.bindTo(window());
- 
-  gui.style().color.set(glv::Color(0.7), 0.5);
- 
-  layout.arrangement("x x");
+    gui.bindTo(window());
+    gui.style().color.set(glv::Color(0.7), 0.5);
+    layout.arrangement("x x");
+    layout << new glv::Label("frequency");
+    layout << new glv::Label("amplitude");
+    sliders = { glv::Rect(100, 64), 1, 8, 1 }; 
+    layout << sliders;
+    sliders2 = { glv::Rect(100, 64), 1, 8, 1 }; 
+    layout << sliders2;
+    layout.arrange();
+    gui << layout;
   
-  layout << new glv::Label("frequency");
-
-  layout << new glv::Label("amplitude");
-
-  sliders = { glv::Rect(100, 64), 1, 8, 1 }; 
-  layout << sliders;
-  
-  sliders2 = { glv::Rect(100, 64), 1, 8, 1 }; 
-  layout << sliders2;
- 
-  layout.arrange();
-
-  gui << layout;
-  
-  for (int i = 0; i < 8; i++) {
-    sine[i].freq(f[i]);
-  }
+    for (int i = 0; i < 8; i++) {
+      sine[i].freq(f[i]);
+    }
     initAudio();
   }
 	
@@ -211,8 +237,36 @@ gam::Sine<> sine[8];
     
     for (int i = 0; i < 8; i++) {
       f[i] = sliders.getValue(i) * 1000;
-        sine[i].freq(f[i]);
+      sine[i].freq(f[i]);
       a[i] = sliders2.getValue(i);
+    }
+    
+    if (redrawGraph == true) {
+      calc.calculate(f,a);
+      data.clear();   
+      scaleDegree.clear();
+
+      for (unsigned i = 1; i < 299; i++) {
+        if (calc.diss[i] < calc.diss[i-1])
+          if (calc.diss[i] < calc.diss[i+1]) {
+            Data d = {calc.intervals[i],calc.diss[i]}; 
+            data.push_back(d); 
+          }
+        }
+      
+      std::cout << "MINIMA: " << std::endl;
+      std::sort (data.begin(), data.end(), compareDissonance);
+      Vec3f position = {0,0,0};
+      ScaleDegree d = {position};         
+      scaleDegree.push_back(d);
+      for (unsigned i = 0; i < data.size(); i++) {
+        Vec3f position = {(data[i].interval-1.0f),0,0};
+        ScaleDegree d = {position}; 
+        scaleDegree.push_back(d);
+        std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;   
+      }
+
+      redrawGraph = false;
     }
   }
 
@@ -223,7 +277,11 @@ gam::Sine<> sine[8];
     for (int i = 0; i < 300; i++)
       m.vertex(i/100.0f, calc.diss[i], 0);
       
-    axis.draw(g,graph);
+    for (int i = 0; i < scaleDegree.size(); i++) {
+      scaleDegree[i].draw(g,sphere);
+    }
+
+    axis.draw(g);
 
     g.draw(m);
   }
@@ -233,7 +291,7 @@ gam::Sine<> sine[8];
     while (io()) {
       float s = 0;
       for (int i = 0; i < 8; i++) {
-        sine[i].freq(f[i]);
+        sine[i].freq(f[i] * transpositionFactor);
         s += sine[i]() * a[i];
       }
     s /= 8.0f; 
@@ -242,9 +300,19 @@ gam::Sine<> sine[8];
     }
   }
 
-void onKeyDown(const ViewpointWindow&, const Keyboard& k) {  
-  calc.calculate(f,a);
-}
+  void onKeyDown(const ViewpointWindow&, const Keyboard& k) {  
+    redrawGraph = true;
+  }
+
+  virtual void onMouseDown(const ViewpointWindow& w, const Mouse& mouse) {
+      // make a "ray" based on the mouse x and y
+    Rayd mouse_ray = getPickRay(w, mouse.x(), mouse.y());
+    for (int i = 0; i < scaleDegree.size(); i ++) {    
+      if (mouse_ray.intersectsSphere(scaleDegree[i].position,radius)) {
+        transpositionFactor = scaleDegree[i].position.x + 1;    
+      }
+    }
+  }
 
 };
 
