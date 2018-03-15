@@ -170,13 +170,13 @@ GLVBinding gui;
 glv::Slider slider;
 glv::Sliders sliders;
 glv::Sliders sliders2;
-float f[8] = {100,200,300,400,500,600,700,800};
-float a[8] = {1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3};
+float f[8] = {0,0,0,0,0,0,0,0};
+float a[8] = {0,0,0,0,0,0,0,0};
 bool redrawGraph = false;
 
 glv::Table layout;
 
-gam::Sine<> sine[8];
+gam::Sine<> sine[16];
 float transpositionFactor = 1.0f;
 
   AlloApp() {
@@ -246,6 +246,10 @@ float transpositionFactor = 1.0f;
       data.clear();   
       scaleDegree.clear();
 
+      for (int i = 0; i < 8; i++) {
+        std::cout << "FREQUENCY: " << f[i] << " " << "AMPLITUDE: " << a[i] << std::endl;
+      }
+
       for (unsigned i = 1; i < 299; i++) {
         if (calc.diss[i] < calc.diss[i-1])
           if (calc.diss[i] < calc.diss[i+1]) {
@@ -290,11 +294,17 @@ float transpositionFactor = 1.0f;
     gam::Sync::master().spu(audioIO().fps());
     while (io()) {
       float s = 0;
-      for (int i = 0; i < 8; i++) {
-        sine[i].freq(f[i] * transpositionFactor);
-        s += sine[i]() * a[i];
+      for (int i = 0; i < 16; i++) {
+        if (i < 8) {
+          sine[i].freq(f[i] * transpositionFactor);
+          s += sine[i]() * a[i];
+        }
+        else {
+          sine[i].freq(f[i-8]);
+          s += sine[i]() * a[i-8];
+        }
       }
-    s /= 8.0f; 
+    s /= 16.0f; 
     io.out(0) = s;
     io.out(1) = s;
     }
@@ -308,7 +318,7 @@ float transpositionFactor = 1.0f;
       // make a "ray" based on the mouse x and y
     Rayd mouse_ray = getPickRay(w, mouse.x(), mouse.y());
     for (int i = 0; i < scaleDegree.size(); i ++) {    
-      if (mouse_ray.intersectsSphere(scaleDegree[i].position,radius)) {
+      if (mouse_ray.intersectsSphere(scaleDegree[i].position,radius*1.2)) {
         transpositionFactor = scaleDegree[i].position.x + 1;    
       }
     }
