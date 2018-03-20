@@ -1,3 +1,19 @@
+// Diarmid Flatley
+// 2018-03-20
+// MAT240B
+// Final Project
+
+// Dissonance Curve Calculator
+// Copyright (C) 2018 Diarmid Flatley
+
+/*
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. 
+
+You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -15,7 +31,9 @@
 
 using namespace al;
 
-
+// dissonance curve calculation from William Sethares:
+// http://sethares.engr.wisc.edu/files/disscurve2.cpp
+ 
 struct CalculateCurve {
   int ind;
   int numpartials = 8;
@@ -24,7 +42,6 @@ struct CalculateCurve {
   float frequ[1024];
   float diss[400];
   float intervals[400];
-
   float dstar = (float) (0.24);  
   float s;
   float s1 = (float) (0.0207);
@@ -90,13 +107,10 @@ struct CalculateCurve {
 						
       diss[ind] = d;
 			intervals[ind] = interval;  
-		//	printf("ind is: %d .\n", ind);
-		//	printf("Interval %f - Dissonance %f \n",intervals[ind], diss[ind]);					
 			ind++;
     }
 			
 		int dissvalues = (int) ((highint-lowint)/inc);	
-	//	printf("There are %d dissonance values\n", dissvalues);	
   }
 };
 
@@ -156,7 +170,6 @@ struct ScaleDegree {
     position = initPosition;
     transposition = position.x + 1.0f;
     env = {0,0,0,0};
-      
     env.length(0.05);
   }
 
@@ -294,7 +307,8 @@ glv::Table layout;
         Vec3f position = {(data[i].interval-1.0f),0,0};
         ScaleDegree d = {position}; 
         scaleDegree.push_back(d);
-        std::cout << "INTERVAL: " << data[i].interval << ' ' << "DISSONANCE: " << data[i].dissonance << std::endl;   
+        std::cout << "INTERVAL: " << data[i].interval << ' ' 
+                  << "DISSONANCE: " << data[i].dissonance << std::endl;   
       }
       
       scaleDegree[0].colorState();
@@ -325,6 +339,7 @@ glv::Table layout;
      
       float s = 0;
       float attenuate = 0;  
+      
       for (int i = 0; i < scaleDegree.size(); i ++) {
         s += scaleDegree[i].audio(f, a);    
         attenuate += scaleDegree[i].state * 8;
