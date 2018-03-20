@@ -7,6 +7,7 @@
 
 #include "Gamma/Filter.h"
 #include "Gamma/Oscillator.h"
+#include "Gamma/Envelope.h"
 #include "Gamma/Gen.h"
 
 #include "alloGLV/al_ControlGLV.hpp"
@@ -136,21 +137,55 @@ struct Graph {
   }
   
   void draw(Graphics& g) {
-  g.draw(m);
+    g.color(1,1,1,1);
+    g.draw(m);
   }
 };
 
 struct ScaleDegree {
   Vec3f position;
+  float transposition;
+  bool state = false;
+  Color active = {1, 0, 0, 1};
+  Color inactive = {0, 0, 1, 1,};
+  Color currentColor = {inactive};
+  gam::Sine<> sine[8];
+  gam::Seg<> env;
 
   ScaleDegree(Vec3f initPosition) {
     position = initPosition;
+    transposition = position.x + 1.0f;
+    env = {0,0,0,0};
+      
+    env.length(0.05);
+  }
+
+  void colorState() {
+    if (state == false) {
+      currentColor = active;
+      state = true;
+    }
+    else if (state == true) {
+      currentColor = inactive;
+      state = false;
+    }
   }
   
+  float audio(float freqs[8], float amps[8]) {
+    float s = 0;
+    for (int i = 0; i < 8; i++) {
+      sine[i].freq(freqs[i] * transposition);
+      s += sine[i]() * amps[i];
+    }
+    env = state;
+    s *= env();
+    return s;
+  }
+
   void draw(Graphics& g, Mesh& m) {
-    m.color(1,1,1);
     g.pushMatrix();
     g.translate(position);
+    g.color(currentColor);
     g.draw(m);
     g.popMatrix();
   }
@@ -166,6 +201,8 @@ Mesh graph;
 Mesh sphere;
 float radius = 0.01f;
 
+gam::Seg<> env;
+
 GLVBinding gui;
 glv::Slider slider;
 glv::Sliders sliders;
@@ -176,9 +213,6 @@ bool redrawGraph = false;
 
 glv::Table layout;
 
-gam::Sine<> sine[16];
-float transpositionFactor = 1.0f;
-
   AlloApp() {
     nav().pos(0,0,10);
     navControl().useMouse(false);
@@ -187,23 +221,18 @@ float transpositionFactor = 1.0f;
     
     addSphere(sphere, radius);
       
+    env.length(0.05);
+
     calc.calculate(f,a);
 
     for (unsigned i = 1; i < 299; i++) {
       if ( calc.diss[i] < calc.diss[i-1])
         if (calc.diss[i] < calc.diss[i+1]) {
-          //  std::cout <<  intervals[i] << ' ' << diss[i] << std::endl;
           Data d = {calc.intervals[i],calc.diss[i]}; 
           data.push_back(d); 
         }
     }
-    /*
-    std::sort (data.begin(), data.end(), compareDissonance);
-    for (unsigned i = 0; i < data.size(); i++) {
-      std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;    
-    }
-    */
-    std::cout << "MINIMA: " << std::endl;
+    
     std::sort (data.begin(), data.end(), compareDissonance);
     Vec3f position = {0,0,0};
     ScaleDegree d = {position};
@@ -214,6 +243,8 @@ float transpositionFactor = 1.0f;
       scaleDegree.push_back(d);
       std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;
     }
+
+    scaleDegree[0].colorState();
 
     gui.bindTo(window());
     gui.style().color.set(glv::Color(0.7), 0.5);
@@ -227,9 +258,6 @@ float transpositionFactor = 1.0f;
     layout.arrange();
     gui << layout;
   
-    for (int i = 0; i < 8; i++) {
-      sine[i].freq(f[i]);
-    }
     initAudio();
   }
 	
@@ -237,7 +265,6 @@ float transpositionFactor = 1.0f;
     
     for (int i = 0; i < 8; i++) {
       f[i] = sliders.getValue(i) * 1000;
-      sine[i].freq(f[i]);
       a[i] = sliders2.getValue(i);
     }
     
@@ -267,8 +294,10 @@ float transpositionFactor = 1.0f;
         Vec3f position = {(data[i].interval-1.0f),0,0};
         ScaleDegree d = {position}; 
         scaleDegree.push_back(d);
-        std::cout << data[i].interval << ' ' << data[i].dissonance << std::endl;   
+        std::cout << "INTERVAL: " << data[i].interval << ' ' << "DISSONANCE: " << data[i].dissonance << std::endl;   
       }
+      
+      scaleDegree[0].colorState();
 
       redrawGraph = false;
     }
@@ -293,20 +322,20 @@ float transpositionFactor = 1.0f;
   virtual void onSound(al::AudioIOData& io) {
     gam::Sync::master().spu(audioIO().fps());
     while (io()) {
+     
       float s = 0;
-      for (int i = 0; i < 16; i++) {
-        if (i < 8) {
-          sine[i].freq(f[i] * transpositionFactor);
-          s += sine[i]() * a[i];
-        }
-        else {
-          sine[i].freq(f[i-8]);
-          s += sine[i]() * a[i-8];
-        }
-      }
-    s /= 16.0f; 
-    io.out(0) = s;
-    io.out(1) = s;
+      float attenuate = 0;  
+      for (int i = 0; i < scaleDegree.size(); i ++) {
+        s += scaleDegree[i].audio(f, a);    
+        attenuate += scaleDegree[i].state * 8;
+       } 
+
+       if (attenuate <= 0) attenuate = 1;
+       env = attenuate;
+       s /= env(); 
+       io.out(0) = s;
+       io.out(1) = s;
+    
     }
   }
 
@@ -315,11 +344,10 @@ float transpositionFactor = 1.0f;
   }
 
   virtual void onMouseDown(const ViewpointWindow& w, const Mouse& mouse) {
-      // make a "ray" based on the mouse x and y
     Rayd mouse_ray = getPickRay(w, mouse.x(), mouse.y());
     for (int i = 0; i < scaleDegree.size(); i ++) {    
-      if (mouse_ray.intersectsSphere(scaleDegree[i].position,radius*1.2)) {
-        transpositionFactor = scaleDegree[i].position.x + 1;    
+      if (mouse_ray.intersectsSphere(scaleDegree[i].position,radius*1.5)) {
+        scaleDegree[i].colorState();
       }
     }
   }
